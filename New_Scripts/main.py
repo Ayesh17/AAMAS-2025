@@ -1,142 +1,102 @@
 import os
 import numpy as np
 import pandas as pd
-from tensorflow.keras.preprocessing.sequence import pad_sequences
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import train_test_split
+from tensorflow.keras.callbacks import EarlyStopping
+from LSTM_Model import create_lstm_model
 
-# Define all column headers based on the provided list
-column_headers = [
-    'TIME', 'BLUE_ID', 'BLUE_LAT', 'BLUE_LON', 'BLUE_HEADING', 'BLUE_SPEED',
-    'RED_ID', 'RED_LAT', 'RED_LON', 'RED_HEADING', 'RED_SPEED',
-    'DISTANCE', 'BEH_PHASE', 'COLREGS', 'AVOIDANCE', 'BEH_LABEL',
-    'abs_b_r', 'abs_r_b', 'rel_b_r', 'rel_r_b', 'abs_dheading',
-    'r_accel', 'dvx', 'dvy', 'xr', 'yr', 'cpa_time', 'cpa_dist',
-    'S_SIDE', 'S_BEAM', 'S_REG_b_r', 'S_REG_r_b', 'S_DREL_BEAR',
-    'S_DELTA_DIST', 'S_ACCEL', 'S_DABS_HEADING', 'S_CPA_TIME',
-    'S_CPA_DELTA_DIST', 'S_CPA_TIME_DIST'
-]
+# Define the directory containing the CSV files
+data_folder = "Data2"
 
-# List of features to exclude based on the previous analysis
-features_to_exclude = [
-    'TIME', 'BLUE_ID', 'RED_ID', 'DISTANCE', 'xr', 'yr', 'COLREGS', 'abs_b_r', 'abs_r_b'
-]
+# Collect all CSV files in the data folder (ignoring 'all_sequences_normalized.csv' for now)
+csv_files = [os.path.join(data_folder, file) for file in os.listdir(data_folder) if file.endswith(".csv") and "all_sequences_normalized" not in file]
 
-# List of features to normalize and retain
-features_to_normalize = [
-    'BLUE_SPEED', 'RED_SPEED', 'BLUE_HEADING', 'RED_HEADING', 'abs_dheading',
-    'r_accel', 'dvx', 'dvy', 'cpa_dist', 'S_DELTA_DIST', 'S_DABS_HEADING',
-    'S_CPA_TIME', 'S_CPA_DELTA_DIST', 'S_CPA_TIME_DIST'
-]
+# # Print the list of CSV files being processed
+# print(f"csv_files {csv_files}")
 
-# Retain only columns that are not excluded
-filtered_columns = [col for col in column_headers if col not in features_to_exclude]
+# Initialize lists to store sequences and labels
+all_sequences = []
+all_labels = []
 
-# Create new names for the normalized features
-normalized_feature_names = [f"{col}_normalized" for col in features_to_normalize]
-
-# Replace original feature names with the new normalized ones
-final_columns = [
-    col if col not in features_to_normalize else f"{col}_normalized" for col in filtered_columns
-]
-
-# Ensure the output directory exists
-output_folder = "Data2"
-os.makedirs(output_folder, exist_ok=True)
-
-# Path to the root folder containing behavior subfolders (update this path as needed)
-root_folder = "HMM_train_data_noise_preprocessed"
-
-# Set the maximum sequence length for padding/truncation
-max_sequence_length = 200
-
-# Function to preprocess, normalize selected features, and assign updated column headers
-def preprocess_and_normalize(file_path):
+# Read each CSV file and extract sequences and labels
+for csv_file in csv_files:
     try:
-        # Read the CSV file without headers and assign the custom column headers
-        df = pd.read_csv(file_path, header=None)  # Read without headers, treat all rows as data
-        df.columns = column_headers  # Assign custom headers
-        print(f"Read CSV file: {file_path} with shape: {df.shape}")
+        # Try to read the CSV file into a DataFrame
+        df = pd.read_csv(csv_file)
 
-        # Remove unwanted columns
-        df = df[filtered_columns]
+        # Check if the DataFrame is empty or contains no valid columns
+        if df.empty or len(df.columns) == 0:
+            print(f"Skipping {csv_file}: File is empty or has no columns.")
+            continue
 
-        # Check if the DataFrame is empty
-        if df.empty:
-            print(f"Warning: {file_path} is empty and will be skipped.")
-            return None
+        # Verify that 'Label' column exists
+        if 'Label' not in df.columns:
+            print(f"Skipping {csv_file}: 'Label' column not found.")
+            continue
 
-        # Normalize the selected features and update column names
-        scaler = MinMaxScaler()
-        df[features_to_normalize] = scaler.fit_transform(df[features_to_normalize])
+        # Extract features (all columns except 'Label')
+        feature_columns = [col for col in df.columns if col != 'Label']
+        sequence = df[feature_columns].values
 
-        # Assign the new column names for normalized features
-        df.columns = final_columns
+        # Extract label for this sequence (assuming it's the same for all rows in the sequence)
+        label = df['Label'].iloc[0]
 
-        # Rename the `BEH_LABEL` column to `Label` and move it to the last position
-        df = df.rename(columns={'BEH_LABEL': 'Label'})
-        label_column = df.pop('Label')  # Remove the 'Label' column
-        df['Label'] = label_column  # Add it back as the last column
+        # Append the sequence and label to lists
+        all_sequences.append(sequence)
+        all_labels.append(label)
 
-        # Adjust the DataFrame to ensure it has exactly 200 rows
-        if len(df) < max_sequence_length:
-            # Pad with zeros if the sequence is shorter than 200 rows
-            padding_df = pd.DataFrame(0, index=np.arange(max_sequence_length - len(df)), columns=df.columns)
-            df = pd.concat([df, padding_df], ignore_index=True)
-            print(f"Padded sequence in {file_path} to {max_sequence_length} rows.")
-        elif len(df) > max_sequence_length:
-            # Truncate if the sequence is longer than 200 rows
-            df = df.iloc[:max_sequence_length]
-            print(f"Truncated sequence in {file_path} to {max_sequence_length} rows.")
-
-        # Convert the DataFrame to a NumPy array
-        return df
+    except pd.errors.EmptyDataError:
+        print(f"Skipping {csv_file}: No data in the file (EmptyDataError).")
+    except pd.errors.ParserError:
+        print(f"Skipping {csv_file}: Parsing error (ParserError).")
     except Exception as e:
-        print(f"Error reading {file_path}: {e}")
-        return None
+        print(f"Skipping {csv_file}: Unexpected error - {e}")
 
-# Read and preprocess all CSV files, and collect them into sequences with labels
-data_sequences = []
-labels = []
-behavior_classes = ["Benign", "block", "ram", "cross", "headon", "herd", "overtake"]
+# Check if any sequences were successfully read
+if len(all_sequences) == 0:
+    print("No valid sequences were found. Please check the data directory and file contents.")
+    exit()
 
-# Mapping for behavior names to ensure correct file naming
-behavior_mapping = {0: "benign", 1: "block", 2: "ram", 3: "cross", 4: "headon", 5: "herd", 6: "overtake"}
+# Convert the list of sequences into a 3D NumPy array
+X = np.array(all_sequences)  # Shape: (number_of_sequences, number_of_timesteps, number_of_features)
+y = np.array(all_labels)     # Shape: (number_of_sequences,)
 
-# Define label mapping dictionary for label transformation
-label_mapping = {1: 0, 8: 1, 6: 2, 5: 3, 7: 5, 3: 4, 4: 6}
+# Check the shapes of the features and labels
+print(f"X shape: {X.shape}, y shape: {y.shape}")
 
-# New labels
-# Benign -> 0, block -> 1, ram -> 2, cross -> 3, headon -> 4, herd -> 5, overtake -> 6
+# Determine the number of timesteps and features from the input data
+timesteps = X.shape[1]  # The number of time steps per sequence
+num_features = X.shape[2]  # The number of features per time step
+num_classes = len(set(y))  # Number of unique classes (behavior labels)
 
-# Iterate over each behavior and corresponding files
-for behavior in behavior_classes:
-    folder_path = os.path.join(root_folder, behavior, "scenario")  # Include "scenario" subfolder in path
-    if not os.path.exists(folder_path):
-        print(f"Warning: The folder '{folder_path}' does not exist. Skipping this behavior.")
-        continue
+# Split data into training and testing sets (80% train, 20% test)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-    print(f"Processing behavior: {behavior}")
-    behavior_index = behavior_classes.index(behavior)
-    sequence_index = 0  # Track sequence numbers for file naming
+# Check the shapes of training and testing data
+print(f"X_train shape: {X_train.shape}, y_train shape: {y_train.shape}")
+print(f"X_test shape: {X_test.shape}, y_test shape: {y_test.shape}")
 
-    for file in os.listdir(folder_path):
-        if file.endswith("hmm_formatted.csv"):
-            file_path = os.path.join(folder_path, file)
-            print(f"Reading file: {file_path}")
+# Create the LSTM model using the architecture defined in lstm_model.py
+model = create_lstm_model(timesteps, num_features, num_classes)
 
-            # Process the file and normalize it
-            sequence_df = preprocess_and_normalize(file_path)
-            if sequence_df is not None:
-                # Apply the label mapping transformation
-                sequence_df['Label'] = sequence_df['Label'].map(label_mapping).fillna(sequence_df['Label']).astype(int)
+# Define early stopping to prevent overfitting during training
+early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
 
-                data_sequences.append(sequence_df.values)
-                labels.append(sequence_df['Label'].iloc[0])  # Use the label from the 'Label' column
+# Train the LSTM model
+history = model.fit(
+    X_train, y_train,
+    validation_data=(X_test, y_test),
+    epochs=50,
+    batch_size=32,
+    callbacks=[early_stopping],
+    verbose=1
+)
 
-                # Save each sequence as a CSV file with the specified naming convention and 'Label' column included
-                file_name = f"{output_folder}/{behavior_mapping[behavior_index]}_{sequence_index}.csv"
-                sequence_df.to_csv(file_name, index=False)
-                print(f"Saved sequence {sequence_index} to {file_name}")
-                sequence_index += 1
+# Evaluate the model on the test data
+test_loss, test_accuracy = model.evaluate(X_test, y_test, verbose=1)
+print(f"Test Accuracy: {test_accuracy * 100:.2f}%")
+print(f"Test Loss: {test_loss:.4f}")
 
-print("Preprocessing completed. All sequences have been adjusted to the required length.")
+# Save the trained model
+model.save("lstm_ship_behavior_model.h5")
+print("Model saved as 'lstm_ship_behavior_model.h5'")

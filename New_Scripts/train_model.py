@@ -6,7 +6,7 @@ from tensorflow.keras.callbacks import EarlyStopping
 from LSTM_Model import create_lstm_model
 
 # Define the directory containing the CSV files
-data_folder = "Data"
+data_folder = "Data2"
 
 # Collect all CSV files in the data folder (ignoring 'all_sequences_normalized.csv' for now)
 csv_files = [os.path.join(data_folder, file) for file in os.listdir(data_folder) if file.endswith(".csv") and "all_sequences_normalized" not in file]
