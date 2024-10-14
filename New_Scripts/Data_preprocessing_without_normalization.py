@@ -1,7 +1,6 @@
 import os
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import MinMaxScaler
 
 # Define the original column headers from the CSV files
 column_headers = [
@@ -14,7 +13,7 @@ column_headers = [
     'S_DELTA_DIST', 'S_ACCEL', 'S_DABS_HEADING', 'S_CPA_TIME',
     'S_CPA_DELTA_DIST', 'S_CPA_TIME_DIST'
 ]
-#
+
 # Define the 23 selected columns you want to retain
 selected_columns = [
     'DISTANCE', 'S_DELTA_DIST', 'RED_SPEED', 'abs_dheading', 'S_REG_r_b', 'S_REG_b_r', 'cpa_time',
@@ -23,7 +22,6 @@ selected_columns = [
     'S_CPA_TIME', 'S_ACCEL'
 ]
 
-
 # # Define the 15 selected columns you want to retain
 # selected_columns = [
 #     'DISTANCE', 'S_DELTA_DIST', 'RED_SPEED', 'abs_dheading', 'S_REG_r_b', 'S_REG_b_r', 'cpa_time',
@@ -31,18 +29,9 @@ selected_columns = [
 # ]
 #
 
-# List of features to normalize
-features_to_normalize = selected_columns
-
-# Create new names for the normalized features
-normalized_feature_names = [f"{col}_normalized" for col in features_to_normalize]
-
-# Create final column names with new normalized names
-final_columns = [f"{col}_normalized" for col in selected_columns] + ['Label']
-
 # Ensure the root output directory exists
-output_root_folder = "Data"
-# output_root_folder = "Data15"
+output_root_folder = "Data_No_Normalization"
+# output_root_folder = "Data15_No_Normalization"
 os.makedirs(output_root_folder, exist_ok=True)
 
 # Ensure separate subdirectories for train, validation, and test within the output folder
@@ -59,8 +48,8 @@ root_folder = "data_preprocessed"
 # Set the maximum sequence length for padding/truncation
 max_sequence_length = 500
 
-# Function to preprocess, normalize selected features, and assign updated column headers
-def preprocess_and_normalize(file_path):
+# Function to preprocess, pad/truncate selected features, and assign updated column headers
+def preprocess_file(file_path):
     try:
         # Read the CSV file without headers and assign the custom column headers
         df = pd.read_csv(file_path, header=None)  # Read without headers
@@ -82,16 +71,6 @@ def preprocess_and_normalize(file_path):
             print(f"Warning: {file_path} is empty after selecting columns and will be skipped.")
             return None
 
-        # Normalize the selected features and update column names
-        scaler = MinMaxScaler()
-        df[features_to_normalize] = scaler.fit_transform(df[features_to_normalize])
-
-        # Assign the new column names for normalized features
-        df.columns = final_columns[:-1]  # Exclude 'Label' for now
-
-        # Add a placeholder 'Label' column at the end
-        df['Label'] = 0  # Replace 0 with appropriate labels if needed
-
         # Adjust the DataFrame to ensure it has exactly 500 rows
         if len(df) < max_sequence_length:
             # Pad with zeros if the sequence is shorter than 500 rows
@@ -103,15 +82,13 @@ def preprocess_and_normalize(file_path):
             df = df.iloc[:max_sequence_length]
             print(f"Truncated sequence in {file_path} to {max_sequence_length} rows.")
 
-        # Convert the DataFrame to a NumPy array
+        # Return the preprocessed DataFrame
         return df
     except Exception as e:
         print(f"Error reading {file_path}: {e}")
         return None
 
 # Read and preprocess all CSV files, and collect them into sequences with labels
-data_sequences = []
-labels = []
 behavior_classes = ["benign", "block", "ram", "cross", "headon", "herd", "overtake"]
 
 # Define label mapping dictionary for label transformation
@@ -134,14 +111,11 @@ for split in ["train", "validation", "test"]:
                 file_path = os.path.join(folder_path, file)
                 print(f"Reading file: {file_path}")
 
-                # Process the file and normalize it
-                sequence_df = preprocess_and_normalize(file_path)
+                # Process the file without normalization, but with padding/truncation
+                sequence_df = preprocess_file(file_path)
                 if sequence_df is not None:
                     # Assign the label based on the behavior type
                     sequence_df['Label'] = behavior_label
-
-                    data_sequences.append(sequence_df.values)
-                    labels.append(sequence_df['Label'].iloc[0])  # Use the label from the 'Label' column
 
                     # Determine the correct output subfolder based on split
                     if split == "train":
@@ -157,4 +131,4 @@ for split in ["train", "validation", "test"]:
                     print(f"Saved sequence {sequence_index} to {file_name}")
                     sequence_index += 1
 
-print("Preprocessing completed. All sequences have been adjusted to the required length.")
+print("Processing completed. All sequences have been adjusted to the required length.")

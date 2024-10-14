@@ -3,14 +3,15 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from tensorflow.keras.callbacks import EarlyStopping
-from LSTM_Model import create_lstm_model  # Assuming this file contains the LSTM model architecture for multiclass classification
+from LSTM_Model import create_lstm_model  # Assuming this file contains the LSTM model architecture for binary classification
 
-# Ensure environment is set properly
+import os
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
-# Define directories for training and validation CSV files from the multiclass-labeled dataset
-train_data_folder = "Data/train"
-val_data_folder = "Data/validation"
+
+# Define directories for training and validation CSV files from the binary-labeled dataset
+train_data_folder = "Binary_Data/train"
+val_data_folder = "Binary_Data/validation"
 
 # Ensure a folder for saving graphs exists
 plots_folder = "plots"
@@ -75,9 +76,9 @@ if len(X_train) == 0 or len(X_val) == 0:
 # Determine the number of timesteps and features from the training data
 timesteps = X_train.shape[1]  # The number of time steps per sequence (should be 500)
 num_features = X_train.shape[2]  # The number of features per time step (should be 23)
-num_classes = len(np.unique(y_train))  # Determine the number of unique classes
+num_classes = 1  # Binary classification
 
-# Create the LSTM model using the architecture defined in LSTM_Model.py (for multiclass classification)
+# Create the LSTM model using the architecture defined in LSTM_Model.py (for binary classification)
 model = create_lstm_model(timesteps, num_features, num_classes)
 
 # Define early stopping to prevent overfitting during training
@@ -87,15 +88,15 @@ early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weig
 history = model.fit(
     X_train, y_train,
     validation_data=(X_val, y_val),  # Use the validation set for validation
-    epochs=50,
+    epochs=2,
     batch_size=32,
     callbacks=[early_stopping],
     verbose=1
 )
 
 # Save the trained model
-model.save("lstm_ship_behavior_model_multiclass.h5")
-print("Model saved as 'lstm_ship_behavior_model_multiclass.h5'")
+model.save("lstm_ship_behavior_model_binary.h5")
+print("Model saved as 'lstm_ship_behavior_model_binary.h5'")
 
 # Plot training & validation accuracy values
 plt.figure(figsize=(10, 6))
@@ -108,7 +109,7 @@ plt.legend(loc='upper left')
 plt.grid(True)
 
 # Save accuracy plot to the graphs folder
-accuracy_plot_path = os.path.join(plots_folder, "accuracy_plot_multiclass.png")
+accuracy_plot_path = os.path.join(plots_folder, "accuracy_plot_binary.png")
 plt.savefig(accuracy_plot_path)
 print(f"Accuracy plot saved as {accuracy_plot_path}")
 plt.close()
@@ -124,7 +125,7 @@ plt.legend(loc='upper left')
 plt.grid(True)
 
 # Save loss plot to the graphs folder
-loss_plot_path = os.path.join(plots_folder, "loss_plot_multiclass.png")
+loss_plot_path = os.path.join(plots_folder, "loss_plot_binary.png")
 plt.savefig(loss_plot_path)
 print(f"Loss plot saved as {loss_plot_path}")
 plt.close()

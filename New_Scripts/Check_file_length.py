@@ -2,7 +2,8 @@ import os
 import pandas as pd
 
 # Define the directory containing the CSV files
-data_folder = "Data2"
+data_folder = "Data/train"
+# data_folder = "Data/test"
 
 # Collect all CSV files in the data folder (ignoring 'all_sequences_normalized.csv' for now)
 csv_files = [os.path.join(data_folder, file) for file in os.listdir(data_folder) if file.endswith(".csv") and "all_sequences_normalized" not in file]
@@ -11,8 +12,8 @@ csv_files = [os.path.join(data_folder, file) for file in os.listdir(data_folder)
 print(f"csv_files {csv_files}")
 
 # Expected rows and columns for each file
-expected_rows = 200
-expected_columns = 30
+expected_rows = 500
+expected_columns = 24
 
 # Iterate through each CSV file and print the number of rows and columns
 for csv_file in csv_files:
@@ -28,7 +29,7 @@ for csv_file in csv_files:
             raise ValueError(f"File {csv_file} has {rows} rows and {columns} columns, expected {expected_rows} rows and {expected_columns} columns.")
 
         # Print the filename and its dimensions if it meets the expected dimensions
-        print(f"{csv_file}: {rows} rows, {columns} columns")
+        # print(f"{csv_file}: {rows} rows, {columns} columns")
 
     except ValueError as ve:
         # Print the exception message for mismatched rows or columns
